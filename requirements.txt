@@ -1,0 +1,8 @@
+runpod
+torch
+mmengine
+mmcv
+mmdet
+mmpose
+numpy
+opencv-python-headless
