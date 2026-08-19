@@ -1,13 +1,25 @@
-FROM runpod/base:0.6.2-cuda12.1.0
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
 
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
-# Install Python dependencies
-RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install mmengine mmdet && \
-    pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html && \
-    pip install mmpose && \
-    pip install runpod numpy opencv-python-headless
+# Install Python and system deps
+RUN apt-get update && apt-get install -y \
+    python3.10 python3-pip python3.10-venv wget \
+    libgl1-mesa-glx libglib2.0-0 \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/bin/pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch + dependencies
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+RUN pip install --no-cache-dir \
+    mmengine mmdet mmpose runpod numpy opencv-python-headless
+
+RUN pip install --no-cache-dir \
+    mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
 
 # Download ViTPose-L weights
 RUN mkdir -p /workspace/vitpose && \
