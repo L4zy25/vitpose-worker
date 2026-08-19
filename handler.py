@@ -3,68 +3,107 @@ import base64
 import numpy as np
 import cv2
 import os
-import json
 
 model = None
-device = None
 
 def load_model():
-    global model, device
+    global model
     if model is None:
-        import torch
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        from mmpose.apis import init_model
         
-        # Load ViTPose-L directly with torch
-        checkpoint = torch.load('/workspace/vitpose/vitpose-l-coco.pth', map_location=device, weights_only=False)
+        config_path = '/workspace/vitpose/config.py'
+        if not os.path.exists(config_path):
+            config_content = """
+_base_ = ['mmpose::_base_/default_runtime.py']
+model = dict(
+    type='TopdownPoseEstimator',
+    data_preprocessor=dict(
+        type='PoseDataPreprocessor',
+        mean=[123.675, 116.28, 103.53],
+        std=[58.395, 57.12, 57.375],
+        bgr_to_rgb=True),
+    backbone=dict(
+        type='mmpretrain.VisionTransformer',
+        arch='large',
+        img_size=(256, 192),
+        patch_size=16,
+        qkv_bias=True,
+        drop_path_rate=0.55,
+        with_cls_token=False,
+        out_type='featmap',
+        patch_cfg=dict(padding=2),
+        init_cfg=dict(type='Pretrained', prefix='backbone.', checkpoint=''),
+    ),
+    head=dict(
+        type='HeatmapHead',
+        in_channels=1024,
+        out_channels=17,
+        deconv_out_channels=(256, 256),
+        deconv_kernel_sizes=(4, 4),
+        loss=dict(type='KeypointMSELoss', use_target_weight=True),
+        decoder=dict(
+            type='MSRAHeatmap',
+            input_size=(192, 256),
+            heatmap_size=(48, 64),
+            sigma=2)),
+    test_cfg=dict(flip_test=True, flip_mode='heatmap', shift_heatmap=True))
+"""
+            with open(config_path, 'w') as f:
+                f.write(config_content)
         
-        # For now, use a simpler approach with mmpose
-        # Try importing step by step to find the error
-        try:
-            import mmpose
-            print(f"mmpose version: {mmpose.__version__}")
-        except Exception as e:
-            print(f"mmpose import error: {e}")
-        
-        try:
-            import mmcv
-            print(f"mmcv version: {mmcv.__version__}")
-        except Exception as e:
-            print(f"mmcv import error: {e}")
-            
-        try:
-            import mmengine
-            print(f"mmengine version: {mmengine.__version__}")
-        except Exception as e:
-            print(f"mmengine import error: {e}")
-        
-        try:
-            import mmdet
-            print(f"mmdet version: {mmdet.__version__}")
-        except Exception as e:
-            print(f"mmdet import error: {e}")
-        
-        print("All imports checked")
-        model = True  # placeholder
+        checkpoint = '/workspace/vitpose/vitpose-l-coco.pth'
+        model = init_model(config_path, checkpoint, device='cuda:0')
+        print("ViTPose-L loaded on GPU")
     return model
 
 def handler(event):
+    from mmpose.apis import inference_topdown
+    
     input_data = event.get("input", {})
-    
-    # Debug mode - just return import status
-    if input_data.get("debug"):
-        load_model()
-        return {"status": "ok", "message": "imports checked - see logs"}
-    
     frames = input_data.get("frames", [])
-    if not frames:
-        return {"results": [], "status": "no frames provided"}
     
-    return {"results": [], "status": "handler reached"}
+    if not frames:
+        return {"results": [], "status": "no frames"}
+    
+    pose_model = load_model()
+    results = []
+    
+    for frame_data in frames:
+        img_bytes = base64.b64decode(frame_data["image"])
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        h, w = img.shape[:2]
+        bbox = [[0, 0, w, h]]
+        
+        try:
+            pose_results = inference_topdown(pose_model, img, bbox)
+            keypoints = []
+            if pose_results and len(pose_results) > 0:
+                kpts = pose_results[0].pred_instances.keypoints[0]
+                scores = pose_results[0].pred_instances.keypoint_scores[0]
+                for i in range(17):
+                    keypoints.append({
+                        "x": float(kpts[i][0]),
+                        "y": float(kpts[i][1]),
+                        "score": float(scores[i])
+                    })
+        except Exception as e:
+            keypoints = []
+            print(f"Pose error: {e}")
+        
+        results.append({
+            "frame_id": frame_data.get("frame_id", 0),
+            "keypoints": keypoints
+        })
+    
+    return {"results": results}
 
-print("Starting ViTPose worker...")
+print("Loading ViTPose-L...")
 try:
     load_model()
+    print("Model ready")
 except Exception as e:
-    print(f"Model load error: {e}")
+    print(f"Model load error (will retry on first request): {e}")
 
 runpod.serverless.start({"handler": handler})
