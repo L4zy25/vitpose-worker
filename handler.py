@@ -10,6 +10,7 @@ model = None
 def load_model():
     global model
     if model is None:
+        import mmpretrain  # register VisionTransformer
         from mmpose.apis import init_model
         config_path = '/workspace/vitpose/config.py'
         if not os.path.exists(config_path):
