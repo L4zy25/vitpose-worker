@@ -1,5 +1,5 @@
 import runpod
-import mmpretrain
+# import mmpretrain  # not needed at top level
 import base64
 import numpy as np
 import cv2
