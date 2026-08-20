@@ -1,16 +1,21 @@
 import runpod
-# import mmpretrain  # not needed at top level
 import base64
 import numpy as np
 import cv2
 import os
+
+# Register mmpretrain models in mmpose registry
+try:
+    import mmpretrain
+    print("mmpretrain imported OK")
+except Exception as e:
+    print(f"mmpretrain import warning: {e}")
 
 model = None
 
 def load_model():
     global model
     if model is None:
-        import mmpretrain  # register VisionTransformer
         from mmpose.apis import init_model
         config_path = '/workspace/vitpose/config.py'
         if not os.path.exists(config_path):
@@ -58,38 +63,35 @@ model = dict(
 
 def handler(event):
     from mmpose.apis import inference_topdown
-    
+
     input_data = event.get("input", {})
     frames = input_data.get("frames", [])
-    
+
     if not frames:
         return {"results": [], "status": "no frames"}
-    
+
     pose_model = load_model()
     results = []
-    
-    # Cache decoded images to avoid decoding the same frame multiple times
+
     image_cache = {}
-    
+
     for frame_data in frames:
         img_b64 = frame_data["image"]
-        
-        # Use cache if same image
+
         if img_b64 not in image_cache:
             img_bytes = base64.b64decode(img_b64)
             nparr = np.frombuffer(img_bytes, np.uint8)
             image_cache[img_b64] = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         img = image_cache[img_b64]
-        
-        # Use provided bbox or full image
+
         bbox = frame_data.get("bbox")
         if bbox:
             bboxes = [bbox]
         else:
             h, w = img.shape[:2]
             bboxes = [[0, 0, w, h]]
-        
+
         try:
             pose_results = inference_topdown(pose_model, img, bboxes)
             keypoints = []
@@ -105,15 +107,13 @@ def handler(event):
         except Exception as e:
             keypoints = []
             print(f"Pose error: {e}")
-        
+
         results.append({
             "frame_id": frame_data.get("frame_id", 0),
             "keypoints": keypoints
         })
-    
-    # Clear cache
+
     image_cache.clear()
-    
     return {"results": results}
 
 print("Loading ViTPose-L...")
