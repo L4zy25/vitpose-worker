@@ -4,12 +4,23 @@ import numpy as np
 import cv2
 import os
 
-# Register mmpretrain models in mmpose registry
+# Manually register VisionTransformer into mmpose registry
+from mmengine.registry import MODELS as MMENGINE_MODELS
+from mmpose.registry import MODELS as MMPOSE_MODELS
 try:
-    import mmpretrain
-    print("mmpretrain imported OK")
+    from mmpretrain.models.backbones.vision_transformer import VisionTransformer
+    # Register under the key mmpose expects
+    if not MMPOSE_MODELS.module_dict.get('mmpretrain.VisionTransformer'):
+        MMPOSE_MODELS.register_module(name='mmpretrain.VisionTransformer', module=VisionTransformer)
+    print("VisionTransformer registered OK")
 except Exception as e:
-    print(f"mmpretrain import warning: {e}")
+    print(f"Registration error: {e}")
+    # Fallback: try importing mmpretrain.models to trigger auto-registration
+    try:
+        import mmpretrain.models
+        print("mmpretrain.models imported as fallback")
+    except Exception as e2:
+        print(f"Fallback also failed: {e2}")
 
 model = None
 
@@ -72,17 +83,14 @@ def handler(event):
 
     pose_model = load_model()
     results = []
-
     image_cache = {}
 
     for frame_data in frames:
         img_b64 = frame_data["image"]
-
         if img_b64 not in image_cache:
             img_bytes = base64.b64decode(img_b64)
             nparr = np.frombuffer(img_bytes, np.uint8)
             image_cache[img_b64] = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
         img = image_cache[img_b64]
 
         bbox = frame_data.get("bbox")
