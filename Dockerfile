@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4" && \
     pip install --no-cache-dir --force-reinstall --no-binary xtcocotools "numpy==1.26.4" xtcocotools && \
     python -c "import numpy; print('numpy:', numpy.__version__); assert numpy.__version__.startswith('1.26')"
 # mmpretrain after all cached layers
-RUN pip install --no-cache-dir --no-deps mmpretrain
+RUN pip install --no-cache-dir mmpretrain
 RUN mkdir -p /workspace/vitpose && \
     cd /workspace/vitpose && \
     wget -q https://download.openmmlab.com/mmpose/v1/body_2d_keypoint/topdown_heatmap/coco/td-hm_ViTPose-large_8xb64-210e_coco-256x192-53609f55_20230314.pth -O vitpose-l-coco.pth
