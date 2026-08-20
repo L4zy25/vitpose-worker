@@ -11,27 +11,18 @@ def load_model():
     global model
     if model is None:
         from mmpose.apis import init_model
-        
-        # Force mmpretrain registration by importing its models
         try:
             from mmpretrain.models import backbones
-            print("mmpretrain backbones imported")
         except:
             pass
-        
-        # Also try direct registry registration
-        try:
-            from mmengine.registry import MODELS
-            from mmpretrain.models.backbones.vision_transformer import VisionTransformer
-            MODELS.register_module(name='mmpretrain.VisionTransformer', module=VisionTransformer, force=True)
-            print("VisionTransformer force-registered in MODELS")
-        except Exception as e:
-            print(f"Direct registration failed: {e}")
-        
+
         config_path = '/workspace/vitpose/config.py'
-        if not os.path.exists(config_path):
-            config_content = """
+        # Always rewrite config to ensure it's correct
+        config_content = """
 _base_ = ['mmpose::_base_/default_runtime.py']
+
+codec = dict(type='MSRAHeatmap', input_size=(192, 256), heatmap_size=(48, 64), sigma=2)
+
 model = dict(
     type='TopdownPoseEstimator',
     data_preprocessor=dict(
@@ -58,21 +49,24 @@ model = dict(
         deconv_out_channels=(256, 256),
         deconv_kernel_sizes=(4, 4),
         loss=dict(type='KeypointMSELoss', use_target_weight=True),
-        decoder=dict(
-            type='MSRAHeatmap',
-            input_size=(192, 256),
-            heatmap_size=(48, 64),
-            sigma=2)),
+        decoder=codec),
     test_cfg=dict(flip_test=True, flip_mode='heatmap', shift_heatmap=True))
+
+val_dataloader = dict(
+    batch_size=1,
+    dataset=dict(type='CocoDataset', data_root='', ann_file='', data_prefix=dict(img='')),
+)
+test_dataloader = val_dataloader
 """
-            with open(config_path, 'w') as f:
-                f.write(config_content)
-        
-        # Delete cached config if it exists from previous failed attempt
-        config_py_cache = config_path + 'c'
-        if os.path.exists(config_py_cache):
-            os.remove(config_py_cache)
-        
+        with open(config_path, 'w') as f:
+            f.write(config_content)
+
+        # Clear cached pyc
+        for ext in ['.pyc', 'c']:
+            p = config_path + ext if ext == 'c' else config_path + ext
+            if os.path.exists(p):
+                os.remove(p)
+
         checkpoint = '/workspace/vitpose/vitpose-l-coco.pth'
         model = init_model(config_path, checkpoint, device='cuda:0')
         print("ViTPose-L loaded on GPU")
@@ -101,23 +95,29 @@ def handler(event):
 
         bbox = frame_data.get("bbox")
         if bbox:
-            bboxes = [bbox]
+            bboxes = np.array([bbox], dtype=np.float32)
         else:
             h, w = img.shape[:2]
-            bboxes = [[0, 0, w, h]]
+            bboxes = np.array([[0, 0, w, h]], dtype=np.float32)
 
+        keypoints = []
         try:
             pose_results = inference_topdown(pose_model, img, bboxes)
-            keypoints = []
             if pose_results and len(pose_results) > 0:
-                kpts = pose_results[0].pred_instances.keypoints[0]
-                scores = pose_results[0].pred_instances.keypoint_scores[0]
-                for i in range(17):
-                    keypoints.append({
-                        "x": float(kpts[i][0]),
-                        "y": float(kpts[i][1]),
-                        "score": float(scores[i])
-                    })
+                pr = pose_results[0]
+                if hasattr(pr, 'pred_instances'):
+                    pi = pr.pred_instances
+                    kpts = pi.keypoints
+                    scores = pi.keypoint_scores
+                    if len(kpts) > 0:
+                        if len(scores.shape) > 1:
+                            scores = scores[0]
+                        for i in range(17):
+                            keypoints.append({
+                                "x": float(kpts[0][i][0]),
+                                "y": float(kpts[0][i][1]),
+                                "score": float(scores[i])
+                            })
         except Exception as e:
             keypoints = []
             print(f"Pose error: {e}")
