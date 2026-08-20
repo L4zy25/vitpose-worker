@@ -10,63 +10,32 @@ model = None
 def load_model():
     global model
     if model is None:
-        from mmpose.apis import init_model
         try:
             from mmpretrain.models import backbones
         except:
             pass
-
-        config_path = '/workspace/vitpose/config.py'
-        # Always rewrite config to ensure it's correct
-        config_content = """
-_base_ = ['mmpose::_base_/default_runtime.py']
-
-codec = dict(type='MSRAHeatmap', input_size=(192, 256), heatmap_size=(48, 64), sigma=2)
-
-model = dict(
-    type='TopdownPoseEstimator',
-    data_preprocessor=dict(
-        type='PoseDataPreprocessor',
-        mean=[123.675, 116.28, 103.53],
-        std=[58.395, 57.12, 57.375],
-        bgr_to_rgb=True),
-    backbone=dict(
-        type='mmpretrain.VisionTransformer',
-        arch='large',
-        img_size=(256, 192),
-        patch_size=16,
-        qkv_bias=True,
-        drop_path_rate=0.55,
-        with_cls_token=False,
-        out_type='featmap',
-        patch_cfg=dict(padding=2),
-        init_cfg=dict(type='Pretrained', prefix='backbone.', checkpoint=''),
-    ),
-    head=dict(
-        type='HeatmapHead',
-        in_channels=1024,
-        out_channels=17,
-        deconv_out_channels=(256, 256),
-        deconv_kernel_sizes=(4, 4),
-        loss=dict(type='KeypointMSELoss', use_target_weight=True),
-        decoder=codec),
-    test_cfg=dict(flip_test=True, flip_mode='heatmap', shift_heatmap=True))
-
-val_dataloader = dict(
-    batch_size=1,
-    dataset=dict(type='CocoDataset', data_root='', ann_file='', data_prefix=dict(img='')),
-)
-test_dataloader = val_dataloader
-"""
-        with open(config_path, 'w') as f:
-            f.write(config_content)
-
-        # Clear cached pyc
-        for ext in ['.pyc', 'c']:
-            p = config_path + ext if ext == 'c' else config_path + ext
-            if os.path.exists(p):
-                os.remove(p)
-
+        
+        from mmpose.apis import init_model
+        import mmpose
+        import glob
+        
+        # Find mmpose's bundled ViTPose config
+        mmpose_dir = os.path.dirname(mmpose.__file__)
+        candidates = glob.glob(os.path.join(mmpose_dir, '**', '*ViTPose*large*256x192*.py'), recursive=True)
+        print(f"Config candidates: {candidates}")
+        
+        if candidates:
+            config_path = candidates[0]
+        else:
+            # Try .mim directory
+            candidates = glob.glob(os.path.join(mmpose_dir, '.mim', '**', '*ViTPose*large*256x192*.py'), recursive=True)
+            print(f"Mim candidates: {candidates}")
+            if candidates:
+                config_path = candidates[0]
+            else:
+                raise RuntimeError("No ViTPose config found in mmpose installation")
+        
+        print(f"Using config: {config_path}")
         checkpoint = '/workspace/vitpose/vitpose-l-coco.pth'
         model = init_model(config_path, checkpoint, device='cuda:0')
         print("ViTPose-L loaded on GPU")
@@ -103,24 +72,23 @@ def handler(event):
         keypoints = []
         try:
             pose_results = inference_topdown(pose_model, img, bboxes)
-            if pose_results and len(pose_results) > 0:
+            if pose_results:
                 pr = pose_results[0]
-                if hasattr(pr, 'pred_instances'):
-                    pi = pr.pred_instances
-                    kpts = pi.keypoints
-                    scores = pi.keypoint_scores
-                    if len(kpts) > 0:
-                        if len(scores.shape) > 1:
-                            scores = scores[0]
-                        for i in range(17):
-                            keypoints.append({
-                                "x": float(kpts[0][i][0]),
-                                "y": float(kpts[0][i][1]),
-                                "score": float(scores[i])
-                            })
+                kpts = pr.pred_instances.keypoints
+                scores = pr.pred_instances.keypoint_scores
+                if kpts is not None and len(kpts) > 0:
+                    s = scores[0] if len(scores.shape) > 1 else scores
+                    for i in range(min(17, kpts.shape[1])):
+                        keypoints.append({
+                            "x": float(kpts[0][i][0]),
+                            "y": float(kpts[0][i][1]),
+                            "score": float(s[i])
+                        })
         except Exception as e:
             keypoints = []
             print(f"Pose error: {e}")
+            import traceback
+            traceback.print_exc()
 
         results.append({
             "frame_id": frame_data.get("frame_id", 0),
