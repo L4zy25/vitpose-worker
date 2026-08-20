@@ -61,7 +61,7 @@ model = dict(
     if motionbert_model is None:
         try:
             import sys
-            sys.path.insert(0, '/workspace/motionbert/repo')
+            sys.path.insert(0, '/workspace/motionbert')
             from lib.model.DSTformer import DSTformer
             mb_checkpoint = torch.load('/workspace/motionbert/motionbert_lite.pth', map_location=device, weights_only=False)
             mb_model = DSTformer(
