@@ -22,21 +22,23 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir --no-binary xtcocotools xtcocotools
 
-RUN pip install --no-cache-dir mmpose runpod opencv-python-headless einops
+RUN pip install --no-cache-dir mmpose runpod opencv-python-headless einops timm
 
 # Download ViTPose-L weights
 RUN mkdir -p /workspace/vitpose && \
     cd /workspace/vitpose && \
     wget -q https://download.openmmlab.com/mmpose/v1/body_2d_keypoint/topdown_heatmap/coco/td-hm_ViTPose-large_8xb64-210e_coco-256x192-53609f55_20230314.pth -O vitpose-l-coco.pth
 
-# Download MotionBERT
-RUN mkdir -p /workspace/motionbert && \
-    cd /workspace/motionbert && \
-    git clone https://github.com/Walter0807/MotionBERT.git /workspace/motionbert/repo && \
-    cp -r /workspace/motionbert/repo/lib /workspace/motionbert/ && \
-    wget -q https://github.com/Walter0807/MotionBERT/releases/download/v0.1/motionbert_lite.pth -O motionbert_lite.pth
+# Clone MotionBERT repo
+RUN git clone https://github.com/Walter0807/MotionBERT.git /workspace/motionbert
 
-ENV PYTHONPATH="${PYTHONPATH}:/workspace/motionbert/repo"
+# Download MotionBERT weights separately
+RUN cd /workspace/motionbert && \
+    wget -q --no-check-certificate https://github.com/Walter0807/MotionBERT/releases/download/v0.1/motionbert_lite.pth || \
+    pip install --no-cache-dir gdown && \
+    python -c "import gdown; gdown.download('https://drive.google.com/uc?id=1JfRm5YGxe2sBjVCDnhqFMiMf0MG2sPu-', '/workspace/motionbert/motionbert_lite.pth')"
+
+ENV PYTHONPATH="${PYTHONPATH}:/workspace/motionbert"
 
 COPY handler.py /workspace/handler.py
 
