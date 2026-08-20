@@ -3,24 +3,7 @@ import base64
 import numpy as np
 import cv2
 import os
-
-# Manually register VisionTransformer into mmpose registry
-from mmengine.registry import MODELS as MMENGINE_MODELS
-from mmpose.registry import MODELS as MMPOSE_MODELS
-try:
-    from mmpretrain.models.backbones.vision_transformer import VisionTransformer
-    # Register under the key mmpose expects
-    if not MMPOSE_MODELS.module_dict.get('mmpretrain.VisionTransformer'):
-        MMPOSE_MODELS.register_module(name='mmpretrain.VisionTransformer', module=VisionTransformer)
-    print("VisionTransformer registered OK")
-except Exception as e:
-    print(f"Registration error: {e}")
-    # Fallback: try importing mmpretrain.models to trigger auto-registration
-    try:
-        import mmpretrain.models
-        print("mmpretrain.models imported as fallback")
-    except Exception as e2:
-        print(f"Fallback also failed: {e2}")
+import torch
 
 model = None
 
@@ -28,6 +11,23 @@ def load_model():
     global model
     if model is None:
         from mmpose.apis import init_model
+        
+        # Force mmpretrain registration by importing its models
+        try:
+            from mmpretrain.models import backbones
+            print("mmpretrain backbones imported")
+        except:
+            pass
+        
+        # Also try direct registry registration
+        try:
+            from mmengine.registry import MODELS
+            from mmpretrain.models.backbones.vision_transformer import VisionTransformer
+            MODELS.register_module(name='mmpretrain.VisionTransformer', module=VisionTransformer, force=True)
+            print("VisionTransformer force-registered in MODELS")
+        except Exception as e:
+            print(f"Direct registration failed: {e}")
+        
         config_path = '/workspace/vitpose/config.py'
         if not os.path.exists(config_path):
             config_content = """
@@ -67,6 +67,12 @@ model = dict(
 """
             with open(config_path, 'w') as f:
                 f.write(config_content)
+        
+        # Delete cached config if it exists from previous failed attempt
+        config_py_cache = config_path + 'c'
+        if os.path.exists(config_py_cache):
+            os.remove(config_py_cache)
+        
         checkpoint = '/workspace/vitpose/vitpose-l-coco.pth'
         model = init_model(config_path, checkpoint, device='cuda:0')
         print("ViTPose-L loaded on GPU")
