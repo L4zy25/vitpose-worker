@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y \
     && ln -sf /usr/bin/pip3 /usr/bin/pip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir "numpy==1.26.4"
-
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
@@ -24,6 +22,10 @@ RUN pip install --no-cache-dir --no-binary xtcocotools xtcocotools
 
 RUN pip install --no-cache-dir mmpose runpod opencv-python-headless einops timm
 
+# Force numpy back down and rebuild xtcocotools
+RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4" && \
+    pip install --no-cache-dir --force-reinstall --no-binary xtcocotools xtcocotools
+
 # Download ViTPose-L weights
 RUN mkdir -p /workspace/vitpose && \
     cd /workspace/vitpose && \
@@ -32,11 +34,10 @@ RUN mkdir -p /workspace/vitpose && \
 # Clone MotionBERT repo
 RUN git clone https://github.com/Walter0807/MotionBERT.git /workspace/motionbert
 
-# Download MotionBERT weights separately
+# Download MotionBERT weights
 RUN cd /workspace/motionbert && \
-    wget -q --no-check-certificate https://github.com/Walter0807/MotionBERT/releases/download/v0.1/motionbert_lite.pth || \
-    pip install --no-cache-dir gdown && \
-    python -c "import gdown; gdown.download('https://drive.google.com/uc?id=1JfRm5YGxe2sBjVCDnhqFMiMf0MG2sPu-', '/workspace/motionbert/motionbert_lite.pth')"
+    wget --no-check-certificate https://github.com/Walter0807/MotionBERT/releases/download/v0.1/motionbert_lite.pth -O motionbert_lite.pth || \
+    echo "MotionBERT weights download failed - will need manual upload"
 
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/motionbert"
 
