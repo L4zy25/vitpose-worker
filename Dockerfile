@@ -15,7 +15,9 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir --no-deps mmpose
 RUN pip install --no-cache-dir scipy matplotlib pillow opencv-python-headless
 RUN pip install --no-cache-dir runpod einops timm
-# Pin numpy AND install xtcocotools with numpy constrained, then pin again
+# Install mmpose's missing deps that --no-deps skipped
+RUN pip install --no-cache-dir munkres json-tricks
+# Pin numpy AND install xtcocotools together
 RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4" && \
     pip install --no-cache-dir --force-reinstall --no-binary xtcocotools "numpy==1.26.4" xtcocotools && \
     python -c "import numpy; print('numpy:', numpy.__version__); assert numpy.__version__.startswith('1.26')"
