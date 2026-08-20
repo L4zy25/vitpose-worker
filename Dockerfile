@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir \
     "torch==2.1.2+cu121" "torchvision==0.16.2+cu121" --index-url https://download.pytorch.org/whl/cu121
-RUN pip install --no-cache-dir mmengine mmdet mmpretrain
+RUN pip install --no-cache-dir mmengine mmdet
 RUN pip install --no-cache-dir \
     mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
 RUN pip install --no-cache-dir --no-deps mmpose
@@ -19,6 +19,8 @@ RUN pip install --no-cache-dir munkres json-tricks
 RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4" && \
     pip install --no-cache-dir --force-reinstall --no-binary xtcocotools "numpy==1.26.4" xtcocotools && \
     python -c "import numpy; print('numpy:', numpy.__version__); assert numpy.__version__.startswith('1.26')"
+# mmpretrain after all cached layers
+RUN pip install --no-cache-dir --no-deps mmpretrain
 RUN mkdir -p /workspace/vitpose && \
     cd /workspace/vitpose && \
     wget -q https://download.openmmlab.com/mmpose/v1/body_2d_keypoint/topdown_heatmap/coco/td-hm_ViTPose-large_8xb64-210e_coco-256x192-53609f55_20230314.pth -O vitpose-l-coco.pth
