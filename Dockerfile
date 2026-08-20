@@ -26,8 +26,9 @@ RUN mkdir -p /workspace/vitpose && \
     wget -q https://download.openmmlab.com/mmpose/v1/body_2d_keypoint/topdown_heatmap/coco/td-hm_ViTPose-large_8xb64-210e_coco-256x192-53609f55_20230314.pth -O vitpose-l-coco.pth
 RUN git clone https://github.com/Walter0807/MotionBERT.git /workspace/motionbert
 RUN cd /workspace/motionbert && \
-    wget --no-check-certificate https://github.com/Walter0807/MotionBERT/releases/download/v0.1/motionbert_lite.pth -O motionbert_lite.pth || \
-    echo "weights download failed"
+    mkdir -p checkpoint/pose3d/FT_MB_lite_MB_ft_h36m_global_lite && \
+    wget -q "https://huggingface.co/walterzhu/MotionBERT/resolve/main/checkpoint/pose3d/FT_MB_lite_MB_ft_h36m_global_lite/best_epoch.bin" \
+    -O checkpoint/pose3d/FT_MB_lite_MB_ft_h36m_global_lite/best_epoch.bin
 ENV PYTHONPATH="/workspace/motionbert"
 COPY handler.py /workspace/handler.py
 CMD ["python", "/workspace/handler.py"]
