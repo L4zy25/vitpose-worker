@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
     && ln -sf /usr/bin/pip3 /usr/bin/pip \
     && rm -rf /var/lib/apt/lists/*
 
+# Lock numpy FIRST
+RUN pip install --no-cache-dir "numpy==1.26.4"
+
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
@@ -18,26 +21,34 @@ RUN pip install --no-cache-dir mmengine mmdet
 RUN pip install --no-cache-dir \
     mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
 
+# Build xtcocotools from source against numpy 1.26.4
 RUN pip install --no-cache-dir --no-binary xtcocotools xtcocotools
 
-RUN pip install --no-cache-dir mmpose runpod opencv-python-headless einops timm
+# Install mmpose WITHOUT letting it upgrade numpy
+RUN pip install --no-cache-dir --no-deps mmpose
+RUN pip install --no-cache-dir scipy matplotlib pillow opencv-python-headless
 
-# Force numpy back down and rebuild xtcocotools
-RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4" && \
+# Force numpy back and rebuild xtcocotools one more time
+RUN pip install --no-cache-dir "numpy==1.26.4" && \
     pip install --no-cache-dir --force-reinstall --no-binary xtcocotools xtcocotools
+
+RUN pip install --no-cache-dir runpod einops timm
+
+# Verify numpy version
+RUN python -c "import numpy; print('numpy:', numpy.__version__); assert numpy.__version__.startswith('1.26'), 'numpy wrong version!'"
 
 # Download ViTPose-L weights
 RUN mkdir -p /workspace/vitpose && \
     cd /workspace/vitpose && \
     wget -q https://download.openmmlab.com/mmpose/v1/body_2d_keypoint/topdown_heatmap/coco/td-hm_ViTPose-large_8xb64-210e_coco-256x192-53609f55_20230314.pth -O vitpose-l-coco.pth
 
-# Clone MotionBERT repo
+# Clone MotionBERT
 RUN git clone https://github.com/Walter0807/MotionBERT.git /workspace/motionbert
 
 # Download MotionBERT weights
 RUN cd /workspace/motionbert && \
     wget --no-check-certificate https://github.com/Walter0807/MotionBERT/releases/download/v0.1/motionbert_lite.pth -O motionbert_lite.pth || \
-    echo "MotionBERT weights download failed - will need manual upload"
+    echo "weights download failed"
 
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/motionbert"
 
