@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir \
     mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
 RUN pip install --no-cache-dir --no-deps mmpose
 RUN pip install --no-cache-dir scipy matplotlib pillow opencv-python-headless
-RUN pip install --no-cache-dir runpod einops timm
+RUN pip install --no-cache-dir runpod einops timm easydict
 RUN pip install --no-cache-dir munkres json-tricks
 RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4" && \
     pip install --no-cache-dir --force-reinstall --no-binary xtcocotools "numpy==1.26.4" xtcocotools && \
